@@ -1,0 +1,12 @@
+.venv/
+.env
+*.session
+*.session-journal
+__pycache__/
+*.pyc
+node_modules/
+.wrangler/
+peer_*.mp3
+recording_*.wav
+*.log
+greeting.mp3

@@ -1,0 +1,51 @@
+[project]
+name = "lintvoiceagent"
+version = "0.1.0"
+description = "Full-duplex local voice agent (ASR + LLM + TTS) for Apple Silicon"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    # Web stack
+    "flask==3.0.0",
+    "flask-socketio==5.3.5",
+    "python-socketio==5.10.0",
+    "eventlet>=0.40.3",
+    # Core ML
+    "numpy",
+    "torch",
+    "torchaudio",
+    "transformers",
+    "accelerate",
+    "safetensors",
+    "librosa",
+    "soundfile",
+    # MLX (Apple Silicon)
+    "mlx",
+    "mlx-audio",
+    "misaki[en]",
+    "mlx-vlm",
+    "mlx-lm",
+    # TTS engines
+    "supertonic",
+    # FireRedVAD runtime deps (package itself imported from ./vendor/FireRedVAD)
+    "kaldiio==2.18.0",
+    "kaldi_native_fbank==1.21.3",
+    "textgrid",
+    # Smart Turn v3 (optional VAD)
+    "onnxruntime",
+    "huggingface-hub",
+    # voice-evolve harness (../scripts/run_duet.py): Telegram MTProto + voice
+    "telethon>=1.43.2",
+    "py-tgcalls>=2.2.12",
+    "ntgcalls>=2.1.0",
+    "cryptg>=0.6.0",
+    "python-dotenv>=1.2.2",
+    # Gemini judge for call quality eval (../scripts/judge_call.py)
+    "google-genai>=0.5.0",
+]
+
+[tool.uv]
+# Allow torch + mlx + everything to coexist; don't let fireredvad's pins constrain us.
+override-dependencies = [
+    "torch",
+    "numpy",
+]

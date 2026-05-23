@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+logs/
+*.mp3
+# Allow voice reference samples
+!voices/*.wav
+.DS_Store
+logs/

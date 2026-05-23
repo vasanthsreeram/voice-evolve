@@ -1,0 +1,42 @@
+# Secrets / credentials
+.env
+.env.*
+!.env.example
+
+# Telethon / Pyrogram sessions
+*.session
+*.session-journal
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.uv/
+
+# Model weights (download via Hugging Face — see README)
+**/pretrained_models/
+**/voices/
+**/vendor/
+
+# Recordings: per-run audio + transcripts (huge, regeneratable)
+recordings/
+logs/
+test_audio/
+
+# Unrelated experiment scratch
+experiments/
+
+# Misc artifacts
+transcript.txt
+transcript.srt
+*.log
+
+# Claude Code / agent artifacts
+.claude/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

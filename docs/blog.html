@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>I taught two AI agents to call each other on Telegram while I slept — voice-evolve</title>
+<style>
+  :root {
+    --bg: #0e1014;
+    --fg: #e6e8ee;
+    --muted: #98a0ad;
+    --accent: #7dd3fc;
+    --warn: #f59e0b;
+    --good: #4ade80;
+    --bad: #f87171;
+    --card: #161922;
+    --rule: #242833;
+    --code-bg: #0a0d12;
+  }
+  html, body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 60px 28px 120px;
+  }
+  h1 {
+    font-size: 40px;
+    line-height: 1.15;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  h2 {
+    font-size: 26px;
+    margin: 56px 0 12px;
+    letter-spacing: -0.01em;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 8px;
+  }
+  h3 {
+    font-size: 19px;
+    margin: 28px 0 8px;
+    color: var(--accent);
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 18px;
+    margin-bottom: 36px;
+  }
+  p { margin: 12px 0; }
+  a { color: var(--accent); }
+  code, pre {
+    font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 14px;
+  }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; }
+  .convo {
+    background: var(--card);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 18px 0;
+    font-size: 15.5px;
+  }
+  .convo b.k { color: #f9a8d4; }
+  .convo b.c { color: #a5b4fc; }
+  .convo b.u { color: #fde68a; }
+  .convo .ttfa { color: var(--muted); font-size: 12px; }
+  .pill {
+    display: inline-block;
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12.5px;
+    color: var(--muted);
+    margin: 2px 4px 2px 0;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 18px 0;
+  }
+  .stat {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .stat .v { font-size: 24px; color: var(--accent); font-weight: 600; }
+  .stat .l { color: var(--muted); font-size: 13px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 18px 0;
+    font-size: 14.5px;
+  }
+  th, td { border-bottom: 1px solid var(--rule); padding: 8px 10px; text-align: left; }
+  th { color: var(--muted); font-weight: 500; }
+  .warn { color: var(--warn); }
+  .good { color: var(--good); }
+  .bad  { color: var(--bad);  }
+  .quote {
+    color: var(--muted);
+    font-style: italic;
+    border-left: 2px solid var(--rule);
+    padding: 2px 14px;
+    margin: 14px 0;
+  }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 36px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>I taught two AI agents to call each other on Telegram while I slept</h1>
+<div class="subtitle">A messy, fun, fully-local voice agent — built on a MacBook Air, optimized by Gemini as a judge, and put to bed with a phone call.</div>
+
+<p>
+This started as a curiosity project. I had a local voice agent stack on Apple Silicon —
+<span class="pill">Qwen3-ASR-0.6B</span><span class="pill">Qwen3.5-4B/0.8B (MLX)</span><span class="pill">Kokoro-82M TTS</span><span class="pill">FireRedVAD</span> — and two Telegram accounts that could place real private calls to each other.
+What if I wired the voice stack into the call? Then two AIs could
+ring each other up over the actual Telegram network, hold a conversation,
+and I could iterate on the stack until the call sounded like a real human chat.
+</p>
+
+<p>By the next morning, I picked up the phone and a 4B-parameter model running on my laptop
+roasted my iPhone for nine minutes. Here's how that happened.</p>
+
+<h2>The premise</h2>
+
+<p>
+The repo is called <code>voice-evolve</code>. Two Telegram accounts —
+<i>Katey</i> (on a session called <code>telecall.session</code>) and
+<i>Chippy</i> (on <code>bob.session</code>) — sit in the project root. Two scripts
+existed already: one to dial, one to auto-accept and record. They worked, but
+nothing was using them to hold a <i>conversation</i>. They just streamed a fixed
+WAV from caller to callee.
+</p>
+
+<p>The goal: make each side an AI agent. Real audio, real Telegram, fully local. No cloud. Pick up the phone and talk to your laptop.</p>
+
+<h2>The architecture</h2>
+
+<p>One process per role. Each process:</p>
+
+<ul>
+<li>Logs into one Telegram account via <code>Telethon</code></li>
+<li>Starts <code>pytgcalls</code> on top of it</li>
+<li>Receives peer audio as MP3 frames written into a FIFO by <code>ntgcalls</code>;
+a child <code>ffmpeg</code> decodes them to 16 kHz mono PCM</li>
+<li>Feeds that PCM into the local voice agent:
+<code>VAD → ASR → LLM → streaming TTS</code></li>
+<li>Sends TTS PCM back over the call via <code>send_frame</code> in 10 ms chunks</li>
+</ul>
+
+<p>The first thing I learned was that <b>you cannot run two <code>PyTgCalls</code> instances in one process</b>. They share global libwebrtc state and the second one will SIGABRT a webrtc worker thread inside <code>ntgcalls.cpython-312-darwin.so</code>. The fix is two separate Python processes orchestrated by a parent. Once that landed, the call established cleanly.</p>
+
+<h2>First contact</h2>
+
+<p>About an hour in, two agents had a real conversation over Telegram for the first time. The transcript:</p>
+
+<div class="convo">
+<b class="k">katey:</b>  Hey Chippy! It's Katey. How are you doing today?<br>
+<b class="c">chippy:</b> Hey Katie! I'm doing great, just wrapped up a long day of work and finally got some time to relax. How about you?<br>
+<b class="k">katey:</b>  I heard you wrapped up a long day of work! Did you finally get some time to relax after that?<br>
+<b class="c">chippy:</b> I did get some time to relax, but I still managed to finish that big project I was working on. I'm actually thinking about trying a new pasta dish tonight.<br>
+<b class="k">katey:</b>  I heard you managed to finish that big project! Did you finish it before you got home or did you just keep going until you ran out of time?<br>
+<b class="c">chippy:</b> I heard you're planning a hike next weekend! That sounds like a great way to unwind after work. Did you decide which trail to tackle?<br>
+<b class="k">katey:</b>  That sounds delicious! Did you pick a new pasta brand or just try a new recipe?<br>
+<b class="k">katey:</b>  I'm still deciding between the Blue Ridge Trail or the Pacific Coast route.<br>
+<b class="c">chippy:</b> I finished it before I got home, but I'm still feeling the rush from it. I'm actually planning to try a new pasta dish tonight.<br>
+<b class="k">katey:</b>  I heard you finished it before! Did you tackle the Blue Ridge Trail or the Pacific Coast route?
+</div>
+
+<p>It's not perfect — they're holding two threads in parallel (pasta, hike) instead of strictly alternating — but the topics evolve, they reference each other, they ask follow-ups. The read-aloud test passes. <i>Two AIs called each other on Telegram and chatted about pasta and a hike.</i></p>
+
+<h2>The bugs</h2>
+
+<p>Between "calls connect" and "calls hold real conversations" lived a series of small disasters. Here are the good ones:</p>
+
+<h3>MLX is thread-local</h3>
+<p>Running ASR/LLM/TTS via <code>asyncio.to_thread</code> blew up with <code>RuntimeError: There is no Stream(gpu, 1) in current thread</code>. MLX's GPU stream is bound to the thread that loaded the model. The asyncio default executor uses a pool of worker threads, so each call landed on a different one. Fix: one dedicated <code>ThreadPoolExecutor(max_workers=1)</code> per agent, where the model is loaded <i>and</i> every inference runs. All MLX traffic now flows through a single owning thread.</p>
+
+<h3>Persona drift on a 4B model</h3>
+<p>When I tried to set up an actual debate (pro-choice Katey, pro-life Chippy), the 4B Qwen kept mixing positions — Chippy would argue <i>"bodily autonomy is paramount"</i>. The fix was a more aggressive system prompt that explicitly forbade the opponent's framings (<i>"NEVER use 'bodily autonomy' — that's Katey's argument"</i>), but the cleaner fix was abandoning the safety-loaded topic later in the night.</p>
+
+<h3>Three VAD bugs in a trench coat</h3>
+<p>FireRedVAD's <code>is_turn_complete</code> fires on tiny phoneme-gaps inside an utterance. The original code would <b>throw away the whole accumulated buffer every time that happened</b>, because the buffer wasn't long enough yet to count as "real speech". So the agent <i>never</i> got to ASR — the buffer reset hundreds of times per second of incoming speech. Three rewrites later, the logic was:</p>
+
+<pre><code>1. Accumulate all incoming PCM into utterance_buf
+2. Run VAD.has_speech() on a rolling 100 ms tail
+3. If speech: set saw_speech=True, reset silence_counter
+4. If silence: silence_counter += 1
+5. When silence_counter >= threshold AND saw_speech AND buf is big enough
+   AND buf RMS is above the noise floor → that's a real turn-end → ASR
+6. Otherwise just keep accumulating</code></pre>
+
+<h2>Latency: turning the dials</h2>
+
+<p>The first end-to-end call had ~5 second gaps between turns. Felt awful. The fixes, in order of impact:</p>
+
+<ol>
+<li><b>Streaming LLM → TTS.</b> Lifted the <code>TextChunker</code> from <code>lintvoiceagent</code>: as LLM tokens stream out, they get accumulated into a phrase (splits on comma/period/dash). Each completed phrase is immediately sent to Kokoro and the first PCM hits the playback buffer ~200 ms after the LLM's first token, not after the <i>full</i> response. <b>TTFA: 5 s → ~600 ms.</b></li>
+
+<li><b>KV cache reuse</b> via <code>mlx_lm.models.cache.make_prompt_cache</code>. The 100+ token system prompt no longer gets re-prefilled every turn. <b>LLM TTFT: ~1.2 s → ~300 ms.</b></li>
+
+<li><b>FFmpeg low-latency flags</b> on inbound: <code>-fflags nobuffer -flags low_delay -probesize 32 -analyzeduration 0</code>. Skips the default 5-second media analyze window. Maybe 200 ms.</li>
+
+<li><b>Smaller LLM.</b> Swapped from <code>Qwen3.5-4B-MLX-8bit</code> to <code>Qwen3.5-0.8B-MLX-8bit</code>. Prefill speed roughly 4× faster, quality only marginally weaker for short conversational turns. <b>~500 ms further saved.</b></li>
+
+<li><b>Smaller inbound chunks.</b> Reading 40 ms PCM chunks from ffmpeg instead of 100 ms means VAD sees fresh audio sooner.</li>
+</ol>
+
+<h2>Gemini as a judge</h2>
+
+<p>Once the convos got long enough, I needed to evaluate them without listening to every one. I built <code>scripts/judge_call.py</code>: take the call's stereo wav (L = local TTS, R = peer audio), downmix to mono, upload to Gemini, ask for structured JSON.</p>
+
+<p>The prompt deliberately asked Gemini for <i>description</i>, not <i>prescription</i> — Gemini reports symptoms, the loop driver decides what knob to turn:</p>
+
+<pre><code>{
+  "passed": false,
+  "pacing_score": 4,
+  "overlap_score": 10,
+  "coherence_score": 9,
+  "naturalness_score": 7,
+  "observed_response_latency_s": 3.7,
+  "issues": [
+    "Long silences between turns ranging from 2 to 6 seconds",
+    "Katey's initial point is followed by a 6-second silence...",
+    "Chippy's voice is more monotonous and robotic..."
+  ]
+}</code></pre>
+
+<p>Pass criterion: pacing ≥ 8 AND overlap ≥ 8 AND coherence ≥ 7 AND naturalness ≥ 6 AND latency ≤ 2.5 s. The judge cost about $0.005 per call evaluation on Gemini 3 Flash Preview.</p>
+
+<h2>The loop</h2>
+
+<p>Then I tied it all together: <code>scripts/loop_optimize.py</code>.</p>
+
+<pre><code>while iter < max_iters:
+    knobs    = current_config
+    run_id   = run_duet(knobs, hold=120s)         # ~2 min phone call
+    judgment = ask_gemini(run_id)                  # ~10 s, structured JSON
+
+    if judgment.passed: break
+
+    if judgment.latency &gt; 30s:
+        # Telegram glitch — skip without penalty
+        continue
+
+    if score(judgment) &lt; best_score - 1.5:
+        knobs = best_knobs  # rollback regression
+        continue
+
+    knobs = decide_knob_changes(knobs, judgment)
+    # cooldown 75 s, then repeat</code></pre>
+
+<p>Each iteration is about 3-5 minutes including the 75-second cooldown that lets Telegram's call state settle. The loop ran overnight while I slept.</p>
+
+<p>The composite score combines all four Gemini sub-scores with a latency penalty. Best result across nine optimization loops:</p>
+
+<div class="stats">
+  <div class="stat"><div class="v">5.75</div><div class="l">best composite score (out of ~10)</div></div>
+  <div class="stat"><div class="v">3.0 s</div><div class="l">best observed response latency</div></div>
+  <div class="stat"><div class="v">8 / 10 / 7</div><div class="l">overlap / coherence / naturalness</div></div>
+  <div class="stat"><div class="v">~$0.05</div><div class="l">total Gemini judge spend</div></div>
+</div>
+
+<h2>The wall: Telegram throttled me</h2>
+
+<p>Somewhere around the 30th rapid call of the night, Telegram's anti-abuse system noticed. The calls still <i>connected</i> — <code>INCOMING_CALL</code> fired, both sides armed — but only <b>the first 4-8 seconds of peer audio actually relayed</b>. After that, the channel went silent for the rest of the 120-second call. Every iteration after that hit a "112-second silence" wall.</p>
+
+<p>I confirmed it by dumping per-second R-channel RMS from chippy's stereo wav across 8 consecutive calls:</p>
+
+<table>
+<tr><th>call</th><th>duration</th><th>peer audio actually delivered</th></tr>
+<tr><td>1</td><td>120 s</td><td class="warn">8 s</td></tr>
+<tr><td>2</td><td>120 s</td><td class="warn">8 s</td></tr>
+<tr><td>3</td><td>120 s</td><td class="warn">8 s</td></tr>
+<tr><td>4</td><td>120 s</td><td class="warn">8 s</td></tr>
+<tr><td>5</td><td>120 s</td><td class="warn">8 s</td></tr>
+<tr><td>6</td><td>180 s</td><td class="bad">4 s</td></tr>
+<tr><td>7</td><td>180 s</td><td class="bad">4 s</td></tr>
+<tr><td>8</td><td>180 s</td><td class="bad">4 s</td></tr>
+</table>
+
+<p>No knob tuning fixes that — Telegram itself was the bottleneck. I saved the lesson to <code>memory/telegram_audio_throttle.md</code> for future-me, then stopped iterating and waited several hours.</p>
+
+<h2>The Telegram bypass</h2>
+
+<p>While the throttle cleared, I built a different test: <code>scripts/run_duet_local.py</code>. Two VoiceAgents in one process. Katey's TTS PCM is piped <i>directly</i> into Chippy's <code>feed_16k_pcm</code> via in-memory buffers. No Telegram. This proves the local pipeline is sound, independent of network conditions.</p>
+
+<p>It also surfaced the VAD bug that was hiding behind Telegram's variability. When the in-memory loop fired clean audio at chippy, chippy's pipeline kept dropping every utterance as "too short". Three rewrites of <code>feed_16k_pcm</code> later, the local duet produced this gem in real time:</p>
+
+<div class="convo">
+<b class="k">katey:</b>  Hey Chippy! It's Katey. How are you doing today?<br>
+<b class="c">chippy:</b> I'm just finishing up my shift at the diner, how's your weekend going?
+<span class="ttfa">[llm_ttft=291ms, tts_ttfa=2226ms]</span>
+</div>
+
+<p>One agent told the other she was finishing a shift at a diner. Neither had been told there was a diner. The 0.8B Qwen filled in human-shaped detail.</p>
+
+<h2>Picking up the phone</h2>
+
+<p>By morning the Telegram throttle had cleared. I spawned <i>only</i> Katey (no Chippy auto-receive process) and let her dial. Then I picked up on Chippy's Telegram app like a normal phone call.</p>
+
+<p>Here is the actual transcript of the first real human ↔ AI call (the AI is Katey, running on my MacBook Air):</p>
+
+<div class="convo">
+<b class="k">katey:</b>     Hey Chippy! It's Katey. How are you doing today?<br>
+<b class="u">me:</b>        Hi. Can you hear me?<br>
+<b class="k">katey:</b>     Yeah, I hear you loud and clear, so what's up? <span class="ttfa">[ttfa=468ms]</span><br>
+<b class="u">me:</b>        Have you supposed a discussion about something?<br>
+<b class="k">katey:</b>     No, I was just thinking about that new taco place downtown. <span class="ttfa">[ttfa=540ms]</span><br>
+<b class="u">me:</b>        No, but what taco, please?<br>
+<b class="k">katey:</b>     It's called "El Taco," and the guacamole is insane. <span class="ttfa">[ttfa=800ms]</span><br>
+<b class="u">me:</b>        Oh, I see.<br>
+<b class="k">katey:</b>     I'm going there this weekend, you should come with me. <span class="ttfa">[ttfa=831ms]</span><br>
+<b class="u">me:</b>        That sounds really nice.<br>
+<b class="k">katey:</b>     I'll text you the address, so you can plan your trip. <span class="ttfa">[ttfa=830ms]</span><br>
+<b class="u">me:</b>        Am I also able to barge into your conversation?<br>
+<b class="k">katey:</b>     No, I'm just chatting with you, so you can't barge in. <span class="ttfa">[ttfa=695ms]</span>
+</div>
+
+<p>~600 ms median TTFA, ~120 ms ASR, no overlap, ten clean turns. The audio came out of an actual phone call, end to end, on hardware that fits in a backpack.</p>
+
+<h2>Echo, barge-in, and the Android-vs-Apple smackdown</h2>
+
+<p>Gemini's judgement of the first human call was harsh: <i>"severe overlap"</i> in the mono mix. That was Katey's own TTS bleeding back through Telegram and getting re-ASR'd as if the user said it. Two fixes:</p>
+
+<ul>
+<li><b>Echo suppression:</b> if the ASR transcript is a substring of (or has &gt;60% word overlap with) Katey's most recent assistant message, drop it. It's her own audio bouncing off the relay.</li>
+<li><b>Real barge-in:</b> while <code>_is_speaking=True</code>, check inbound chunk RMS. If it crosses 0.02 (real peer speech, not echo), set a <code>_bargein_requested</code> flag. The streaming LLM→TTS loop checks the flag between phrases and bails out, the playback buffer is cleared instantly, and the user takes the floor.</li>
+</ul>
+
+<p>Then I called back with a new persona: Katey as a die-hard Android fan, ready to roast my iPhone:</p>
+
+<div class="convo">
+<b class="k">katey:</b>  Chippy, I gotta ask — how do you still put up with that iPhone?<br>
+<b style="color:#fbbf24">[BARGE-IN detected, rms=0.025 — stopping TTS]</b><br>
+<b class="u">me:</b>     Wait, can you give me…<br>
+<b class="k">katey:</b>  Nope, I'm just roasting your phone, not selling you a Pixel. <span class="ttfa">[ttfa=551ms]</span><br>
+<b class="u">me:</b>     If iPhone is a walled garden, then yes — so what?<br>
+<b class="k">katey:</b>  No, it's a walled garden, Chippy, and I'm telling you, it's suffocating. <span class="ttfa">[ttfa=590ms]</span><br>
+<b class="u">me:</b>     Open.<br>
+<b class="k">katey:</b>  Open source, Chippy, means you can actually tweak your phone instead of begging Apple for permission.<br>
+<b class="u">me:</b>     iPhones last a bit longer.<br>
+<b class="k">katey:</b>  Two years? Chippy, that's a lifetime on Android, but Apple locks you in forever.<br>
+<b class="u">me:</b>     Reliability sucks.<br>
+<b class="k">katey:</b>  Reliability? Chippy, Pixel cameras beat yours every time, and Samsung updates last longer.<br>
+<b class="u">me:</b>     But it's not true.<br>
+<b class="k">katey:</b>  Not true? Chippy, I saw your Pixel take a photo in the dark, yours just died.<br>
+<b class="u">me:</b>     iPhones are a bit longer.<br>
+<b class="k">katey:</b>  Longer battery? Chippy, Pixel 9 lasts all day, and you can swap batteries on Samsung.<br>
+<b class="u">me:</b>     No, you can not anymore.<br>
+<b class="k">katey:</b>  No? Chippy, Samsung still lets you swap batteries, and Pixel 9 has a 5000mAh battery.<br>
+<b class="u">me:</b>     Oh, you're stupid.<br>
+<b class="k">katey:</b>  Stupid? Chippy, I know my phone better than you, and I'm telling you, it's better.
+</div>
+
+<p>She bluffed (Samsung phones haven't been user-swappable in years), I called her out, and she doubled down. Also: <b>the barge-in worked</b>. I cut her off mid-sentence at the start, her TTS stopped, and she heard what I said. Median TTFA hovered between 550 and 930 ms across twelve turns.</p>
+
+<h2>What it costs</h2>
+
+<table>
+<tr><th>resource</th><th>cost</th></tr>
+<tr><td>RAM (one agent loaded)</td><td>~6.4 GB RSS</td></tr>
+<tr><td>RAM (both agents, full duet)</td><td>~13 GB (page-cache shared)</td></tr>
+<tr><td>CPU idle / listening</td><td>~0.1 %</td></tr>
+<tr><td>CPU during a turn</td><td>30 – 100 % one core</td></tr>
+<tr><td>Disk (Qwen3.5-4B-8bit weights)</td><td>4.8 GB</td></tr>
+<tr><td>Disk (Kokoro-82M-bf16)</td><td>~700 MB</td></tr>
+<tr><td>Disk (Qwen3-ASR-0.6B-4bit)</td><td>~600 MB</td></tr>
+<tr><td>Network during a call</td><td>~500 KB / minute (Opus over MTProto)</td></tr>
+<tr><td>Gemini judge per evaluation</td><td>&lt; $0.005</td></tr>
+</table>
+
+<p>Everything runs on a MacBook Air. The 0.8B variant brings RAM down to ~2.5 GB per agent if you want to be tight. No GPU, no cloud, no nothing.</p>
+
+<h2>The latency breakdown</h2>
+
+<p>For the curious, here's where ~700 ms of end-to-end response time actually goes after all the optimizations:</p>
+
+<table>
+<tr><th>stage</th><th>time</th></tr>
+<tr><td>Telegram one-way (peer → me)</td><td>200 – 500 ms</td></tr>
+<tr><td>ffmpeg FIFO + MP3 decode buffering</td><td>~150 ms</td></tr>
+<tr><td>VAD silence-confirmation</td><td>~200 ms</td></tr>
+<tr><td>ASR (Qwen3-ASR-0.6B, ~1 s of audio)</td><td>100 – 300 ms</td></tr>
+<tr><td>LLM first token (Qwen3.5-4B-8bit, KV cached)</td><td>300 – 600 ms</td></tr>
+<tr><td>LLM tokens to first phrase break</td><td>150 – 400 ms</td></tr>
+<tr><td>Kokoro first audio chunk</td><td>~170 ms</td></tr>
+<tr><td>Telegram one-way (me → peer)</td><td>200 – 500 ms</td></tr>
+</table>
+
+<p>Kokoro itself is &lt; 200 ms — almost everything else is LLM prefill, audio buffering, or network. The remaining big lever is replacing the MP3-via-FIFO inbound path with raw PCM frame callbacks (which <code>pytgcalls</code> exposes via <code>StreamFrames</code>) — that would shave another ~300 ms.</p>
+
+<h2>The fun part</h2>
+
+<p>The thing I keep coming back to is that this all runs on a laptop you can buy at an Apple Store, with two phone accounts, with no cloud calls anywhere in the audio path. The judge is Gemini in the cloud, but that's only because I trust its ears to grade pacing — it doesn't touch the agent at runtime.</p>
+
+<p>I went to sleep with the optimization loop running. I woke up and called my laptop. It picked up, defended Android with a straight face, and let me cut it off mid-sentence. The whole thing — ASR, LLM, TTS, Telegram bridge, optimization harness, judge — is a few thousand lines of Python plus three model weights.</p>
+
+<p>If I were doing this again I'd:</p>
+<ul>
+<li>Wire the raw PCM frame callback path to skip the MP3-via-FIFO buffer entirely</li>
+<li>Use a sliding-window chat history so LLM prefill stays flat at any conversation depth</li>
+<li>Try a Claude-distilled 4B model to dodge the Qwen-4B's content-safety lockup</li>
+<li>Build a half-duplex floor protocol that survives the per-process scope (this one broke on macOS flock semantics)</li>
+</ul>
+
+<p>Code is in <code>voice-evolve</code>. Memory of every false start lives in <code>memory/</code> alongside this writeup. If you call my laptop, please be patient — it's running on 8 GB of unified memory and it's trying its best.</p>
+
+<hr>
+
+<p class="quote">All transcripts, latencies, and Gemini scores in this post are real artifacts from <code>recordings/duet_*</code> and <code>recordings/local_*</code> in the repo.</p>
+
+</main>
+</body>
+</html>
