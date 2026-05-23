@@ -123,6 +123,32 @@
     margin: 14px 0;
   }
   hr { border: none; border-top: 1px solid var(--rule); margin: 36px 0; }
+
+  /* iOS-friendly horizontal scrolling */
+  table, pre { -webkit-overflow-scrolling: touch; }
+
+  /* --- Mobile --- */
+  @media (max-width: 640px) {
+    main { padding: 36px 18px 80px; }
+    h1 { font-size: 28px; line-height: 1.2; }
+    h2 { font-size: 21px; margin-top: 40px; }
+    h3 { font-size: 17px; }
+    .subtitle { font-size: 16px; margin-bottom: 24px; }
+    html, body { font-size: 16px; }
+    pre { font-size: 12px; padding: 10px 12px; border-radius: 6px; }
+    code { font-size: 13px; }
+    .convo { padding: 12px 14px; font-size: 14.5px; }
+    .convo .ttfa { display: block; margin-top: 2px; }
+    .stats { grid-template-columns: 1fr; gap: 8px; }
+    .stat { padding: 12px 14px; }
+    .stat .v { font-size: 21px; }
+    table { font-size: 13.5px; display: block; overflow-x: auto; white-space: nowrap; }
+    th, td { padding: 6px 8px; }
+    .pill { font-size: 11.5px; padding: 1px 8px; }
+  }
+
+  /* Prevent any single token from blowing out the viewport */
+  body, p, li { overflow-wrap: anywhere; }
 </style>
 </head>
 <body>

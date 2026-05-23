@@ -8,6 +8,8 @@
 ![tts](https://img.shields.io/badge/TTS-Kokoro--82M-purple)
 ![asr](https://img.shields.io/badge/ASR-Qwen3--0.6B--ASR-green)
 
+📖 **Read the build story:** [https://vasanthsreeram.github.io/voice-evolve/](https://vasanthsreeram.github.io/voice-evolve/)
+
 ## What this is
 
 `voice-evolve` is an end-to-end **voice-to-voice phone-call harness** for
@@ -47,13 +49,9 @@ run a call.
 
 ### 1. Install
 
-The repo is split into two `uv`-managed Python projects:
-
-- `lintvoiceagent/` — the local ASR/LLM/TTS stack (MLX, Kokoro, FireRedVAD).
-- `telegramcaller/` — the original Telethon / pytgcalls demo it wraps.
-
 The orchestrators live in `scripts/` and run under the `lintvoiceagent`
-environment (which has both the audio stack and the Telegram bindings).
+`uv` environment, which carries both the local audio stack (MLX, Kokoro,
+FireRedVAD) and the Telegram bindings (Telethon, pytgcalls).
 
 ```bash
 git clone https://github.com/vasanthsreeram/voice-evolve.git
@@ -173,19 +171,17 @@ voice-evolve/
 │   ├── judge_call.py           # Gemini-as-judge for one call
 │   └── loop_optimize.py        # Outer optimization loop driven by Gemini scores
 │
-├── lintvoiceagent/             # Local voice stack (ASR + LLM + TTS + VAD)
+├── lintvoiceagent/             # Local voice stack — only the bits voice_agent uses
 │   ├── kokoro_streaming.py     # Kokoro-82M TTS adapter
-│   ├── streaming_tts.py        # TextChunker for streaming LLM→TTS
+│   ├── streaming_tts.py        # TextChunker for streaming LLM → TTS
 │   ├── vad_detector.py         # FireRedVAD + Silero adapters
-│   └── ...
-│
-├── telegramcaller/             # Original Telethon + pytgcalls scaffolding
+│   ├── vad_config.py           # VAD threshold presets
+│   ├── pyproject.toml          # All Python deps (MLX + Telethon + pytgcalls + Gemini)
+│   └── uv.lock
 │
 ├── docs/
-│   ├── SESSION_TO_SESSION.md   # Operational runbook
-│   └── blog.html               # Engaging write-up of the build session
+│   └── index.html              # Engaging write-up of the build session (GH Pages)
 │
-├── CLAUDE.md                   # Working agreements for Claude Code agents
 ├── CONTRIBUTING.md             # How to contribute
 ├── LICENSE                     # MIT
 └── README.md                   # this file
